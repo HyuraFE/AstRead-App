@@ -11,7 +11,7 @@ on:
 
 jobs:
   build:
-    name: Build & Package APK
+    name: Build & Release APK
     runs-on: ubuntu-latest
 
     permissions:
@@ -46,12 +46,12 @@ jobs:
           path: build-output/AstRead.apk
           retention-days: 30
 
-      - name: Create GitHub Release on Tag
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Publish GitHub Release (v1.0.0)
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.0.0' }}
+          name: AstRead ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || 'v1.0.0' }}
           files: build-output/AstRead.apk
-          name: AstRead ${{ github.ref_name }}
           draft: false
           prerelease: false
           generate_release_notes: true
