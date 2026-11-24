@@ -1,5 +1,8 @@
 package pylexia.astread.ui.screens
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -14,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -31,7 +35,17 @@ fun BookshelfScreen(
     onBookClick: (Long) -> Unit = {}
 ) {
     val books by viewModel.books.collectAsState()
-    var showAddDialog by remember { mutableStateOf(false) }
+    val isImporting by viewModel.isImporting.collectAsState()
+    val context = LocalContext.current
+
+    // File picker launcher untuk file EPUB (Storage Access Framework)
+    val epubPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri: Uri? ->
+        uri?.let {
+            viewModel.importEpub(context, it)
+        }
+    }
 
     Scaffold(
         topBar = {
@@ -59,11 +73,28 @@ fun BookshelfScreen(
         },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { showAddDialog = true },
+                onClick = {
+                    // Langsung buka document picker khusus EPUB
+                    epubPickerLauncher.launch(
+                        arrayOf(
+                            "application/epub+zip",
+                            "application/octet-stream",
+                            "*/*"
+                        )
+                    )
+                },
                 containerColor = GoldAccent,
                 contentColor = MidnightBackground
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add Book")
+                if (isImporting) {
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MidnightBackground,
+                        strokeWidth = 2.5.dp
+                    )
+                } else {
+                    Icon(Icons.Default.Add, contentDescription = "Import EPUB")
+                }
             }
         },
         containerColor = MidnightBackground
@@ -75,7 +106,10 @@ fun BookshelfScreen(
                     .padding(padding),
                 contentAlignment = Alignment.Center
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    modifier = Modifier.padding(32.dp)
+                ) {
                     Icon(
                         Icons.Default.Book,
                         contentDescription = null,
@@ -84,14 +118,18 @@ fun BookshelfScreen(
                     )
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Belum ada buku di rak.",
-                        color = TextSecondary,
-                        fontSize = 16.sp
+                        text = "Belum ada buku di rak",
+                        color = Color.White,
+                        fontWeight = FontWeight.SemiBold,
+                        fontSize = 17.sp
                     )
+                    Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Tekan tombol + untuk menambahkan bacaan baru",
-                        color = TextSecondary.copy(alpha = 0.6f),
-                        fontSize = 13.sp
+                        text = "Tekan tombol + untuk memilih file EPUB dari penyimpanan HP kamu. Judul & halaman akan digenerate otomatis.",
+                        color = TextSecondary,
+                        fontSize = 13.sp,
+                        lineHeight = 18.sp,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Center
                     )
                 }
             }
@@ -111,16 +149,6 @@ fun BookshelfScreen(
                     )
                 }
             }
-        }
-
-        if (showAddDialog) {
-            AddBookDialog(
-                onDismiss = { showAddDialog = false },
-                onConfirm = { title, author, pages, vols ->
-                    viewModel.addBook(title, author, pages, vols)
-                    showAddDialog = false
-                }
-            )
         }
     }
 }
@@ -209,63 +237,4 @@ fun BookItemCard(
             }
         }
     }
-}
-
-@Composable
-fun AddBookDialog(
-    onDismiss: () -> Unit,
-    onConfirm: (title: String, author: String?, totalPages: Int, totalVolumes: Int) -> Unit
-) {
-    var title by remember { mutableStateOf("") }
-    var author by remember { mutableStateOf("") }
-    var pagesText by remember { mutableStateOf("") }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Tambah Buku / Light Novel", color = Color.White) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    value = title,
-                    onValueChange = { title = it },
-                    label = { Text("Judul Buku") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = author,
-                    onValueChange = { author = it },
-                    label = { Text("Penulis (Opsional)") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-                OutlinedTextField(
-                    value = pagesText,
-                    onValueChange = { pagesText = it.filter { char -> char.isDigit() } },
-                    label = { Text("Total Halaman") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-        },
-        confirmButton = {
-            Button(
-                onClick = {
-                    val pages = pagesText.toIntOrNull() ?: 1
-                    if (title.isNotBlank()) {
-                        onConfirm(title, author, pages, 1)
-                    }
-                },
-                colors = ButtonDefaults.buttonColors(containerColor = GoldAccent)
-            ) {
-                Text("Simpan", color = MidnightBackground, fontWeight = FontWeight.Bold)
-            }
-        },
-        dismissButton = {
-            TextButton(onClick = onDismiss) {
-                Text("Batal", color = TextSecondary)
-            }
-        },
-        containerColor = MidnightSurface
-    )
 }

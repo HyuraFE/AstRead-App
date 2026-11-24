@@ -1,15 +1,22 @@
 package pylexia.astread.ui.viewmodel
 
+import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import pylexia.astread.data.model.BookEntity
 import pylexia.astread.data.model.BookStatus
 import pylexia.astread.data.repository.BookRepository
-import kotlinx.coroutines.flow.SharingStarted
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
+import pylexia.astread.util.EpubParser
 
 class BookshelfViewModel(private val repository: BookRepository) : ViewModel() {
 
@@ -19,16 +26,31 @@ class BookshelfViewModel(private val repository: BookRepository) : ViewModel() {
         initialValue = emptyList()
     )
 
-    fun addBook(title: String, author: String?, totalPages: Int, totalVolumes: Int = 1) {
+    private val _isImporting = MutableStateFlow(false)
+    val isImporting: StateFlow<Boolean> = _isImporting.asStateFlow()
+
+    fun importEpub(context: Context, uri: Uri) {
         viewModelScope.launch {
-            val newBook = BookEntity(
-                title = title.trim(),
-                author = author?.trim()?.ifEmpty { null },
-                totalPages = totalPages.coerceAtLeast(1),
-                totalVolumes = totalVolumes.coerceAtLeast(1),
-                status = BookStatus.READING
-            )
-            repository.insertBook(newBook)
+            _isImporting.value = true
+            try {
+                val metadata = withContext(Dispatchers.IO) {
+                    EpubParser.parseAndSave(context, uri)
+                }
+
+                val newBook = BookEntity(
+                    title = metadata.title,
+                    author = metadata.author,
+                    totalPages = metadata.totalPages,
+                    currentPage = 0,
+                    epubFilePath = metadata.localFilePath,
+                    status = BookStatus.READING
+                )
+                repository.insertBook(newBook)
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isImporting.value = false
+            }
         }
     }
 
