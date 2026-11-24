@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- AstRead Editorial Colors -->
+    <color name="bg_midnight">#0D0F17</color>
+    <color name="card_midnight">#161926</color>
+    <color name="accent_gold">#E5A93B</color>
+    <color name="text_primary">#F4F4F6</color>
+    <color name="text_secondary">#9E9EA8</color>
+    
+    <!-- Launcher background -->
+    <color name="ic_launcher_background">#0D0F17</color>
+</resources>
