@@ -1,4 +1,4 @@
-package fun.pylexia.astread.ui.screens
+package pylexia.astread.ui.screens
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
@@ -17,12 +17,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import fun.pylexia.astread.data.model.BookEntity
-import fun.pylexia.astread.ui.theme.GoldAccent
-import fun.pylexia.astread.ui.theme.MidnightBackground
-import fun.pylexia.astread.ui.theme.MidnightSurface
-import fun.pylexia.astread.ui.theme.TextSecondary
-import fun.pylexia.astread.ui.viewmodel.BookshelfViewModel
+import pylexia.astread.data.model.BookEntity
+import pylexia.astread.ui.theme.GoldAccent
+import pylexia.astread.ui.theme.MidnightBackground
+import pylexia.astread.ui.theme.MidnightSurface
+import pylexia.astread.ui.theme.TextSecondary
+import pylexia.astread.ui.viewmodel.BookshelfViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

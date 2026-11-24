@@ -1,10 +1,10 @@
-package fun.pylexia.astread.data.repository
+package pylexia.astread.data.repository
 
-import fun.pylexia.astread.data.db.BookDao
-import fun.pylexia.astread.data.db.ReadingSessionDao
-import fun.pylexia.astread.data.model.BookEntity
-import fun.pylexia.astread.data.model.BookStatus
-import fun.pylexia.astread.data.model.ReadingSessionEntity
+import pylexia.astread.data.db.BookDao
+import pylexia.astread.data.db.ReadingSessionDao
+import pylexia.astread.data.model.BookEntity
+import pylexia.astread.data.model.BookStatus
+import pylexia.astread.data.model.ReadingSessionEntity
 import kotlinx.coroutines.flow.Flow
 
 class BookRepository(

@@ -1,11 +1,11 @@
-package fun.pylexia.astread.data.db
+package pylexia.astread.data.db
 
 import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
-import fun.pylexia.astread.data.model.BookEntity
-import fun.pylexia.astread.data.model.ReadingSessionEntity
+import pylexia.astread.data.model.BookEntity
+import pylexia.astread.data.model.ReadingSessionEntity
 
 @Database(
     entities = [BookEntity::class, ReadingSessionEntity::class],

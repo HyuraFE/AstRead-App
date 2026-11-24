@@ -1,11 +1,11 @@
-package fun.pylexia.astread.ui.viewmodel
+package pylexia.astread.ui.viewmodel
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
-import fun.pylexia.astread.data.model.BookEntity
-import fun.pylexia.astread.data.model.BookStatus
-import fun.pylexia.astread.data.repository.BookRepository
+import pylexia.astread.data.model.BookEntity
+import pylexia.astread.data.model.BookStatus
+import pylexia.astread.data.repository.BookRepository
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn

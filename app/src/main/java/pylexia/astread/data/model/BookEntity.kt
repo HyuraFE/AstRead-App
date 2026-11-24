@@ -1,4 +1,4 @@
-package fun.pylexia.astread.data.model
+package pylexia.astread.data.model
 
 import androidx.room.Entity
 import androidx.room.PrimaryKey

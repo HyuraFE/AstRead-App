@@ -10,7 +10,7 @@ Modern, 100% offline-first Book & Light Novel Tracker built natively with **Kotl
 - **Database:** Room Database (SQLite Native, Zero Backend, Zero Auth)
 - **Architecture:** MVVM + Clean Architecture + StateFlow
 - **CI/CD:** GitHub Actions (Build APK otomatis setiap kali push)
-- **App ID:** `fun.pylexia.astread`
+- **App ID:** `pylexia.astread`
 
 ---
 

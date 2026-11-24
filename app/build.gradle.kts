@@ -6,11 +6,11 @@ plugins {
 }
 
 android {
-    namespace = "fun.pylexia.astread"
+    namespace = "pylexia.astread"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "fun.pylexia.astread"
+        applicationId = "pylexia.astread"
         minSdk = 26
         targetSdk = 35
         versionCode = 1

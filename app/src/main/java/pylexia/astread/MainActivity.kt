@@ -1,15 +1,15 @@
-package fun.pylexia.astread
+package pylexia.astread
 
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
-import fun.pylexia.astread.data.db.AppDatabase
-import fun.pylexia.astread.data.repository.BookRepository
-import fun.pylexia.astread.ui.screens.BookshelfScreen
-import fun.pylexia.astread.ui.theme.AstReadTheme
-import fun.pylexia.astread.ui.viewmodel.BookshelfViewModel
-import fun.pylexia.astread.ui.viewmodel.BookshelfViewModelFactory
+import pylexia.astread.data.db.AppDatabase
+import pylexia.astread.data.repository.BookRepository
+import pylexia.astread.ui.screens.BookshelfScreen
+import pylexia.astread.ui.theme.AstReadTheme
+import pylexia.astread.ui.viewmodel.BookshelfViewModel
+import pylexia.astread.ui.viewmodel.BookshelfViewModelFactory
 
 class MainActivity : ComponentActivity() {
 

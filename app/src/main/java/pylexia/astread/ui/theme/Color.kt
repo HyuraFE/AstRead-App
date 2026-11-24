@@ -1,4 +1,4 @@
-package fun.pylexia.astread.ui.theme
+package pylexia.astread.ui.theme
 
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.ui.graphics.Color

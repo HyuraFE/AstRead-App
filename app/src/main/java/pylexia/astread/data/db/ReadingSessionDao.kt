@@ -1,7 +1,7 @@
-package fun.pylexia.astread.data.db
+package pylexia.astread.data.db
 
 import androidx.room.*
-import fun.pylexia.astread.data.model.ReadingSessionEntity
+import pylexia.astread.data.model.ReadingSessionEntity
 import kotlinx.coroutines.flow.Flow
 
 @Dao
