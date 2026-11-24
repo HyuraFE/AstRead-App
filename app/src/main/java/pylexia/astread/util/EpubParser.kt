@@ -7,6 +7,7 @@ import android.net.Uri
 import android.provider.OpenableColumns
 import org.xmlpull.v1.XmlPullParser
 import org.xmlpull.v1.XmlPullParserFactory
+import java.io.ByteArrayOutputStream
 import java.io.File
 import java.io.FileOutputStream
 import java.io.InputStream
@@ -28,6 +29,9 @@ data class EpubChapter(
 
 object EpubParser {
 
+    // Batas aman untuk mencegah Memory Exhaustion / Zip Bomb DoS (50 MB)
+    private const val MAX_ENTRY_BYTES = 50 * 1024 * 1024L
+
     fun parseAndSave(context: Context, uri: Uri): EpubMetadata {
         val resolver = context.contentResolver
         var originalFileName = "imported_book.epub"
@@ -39,9 +43,14 @@ object EpubParser {
             }
         }
 
+        // Sanitasi nama file untuk mencegah Path Traversal (CWE-22)
+        val sanitizedName = File(originalFileName).name
+            .replace(Regex("[^a-zA-Z0-9._\\- ]"), "_")
+            .ifBlank { "book.epub" }
+
         val timestamp = System.currentTimeMillis()
         val booksDir = File(context.filesDir, "books").apply { mkdirs() }
-        val targetFile = File(booksDir, "${timestamp}_$originalFileName")
+        val targetFile = File(booksDir, "${timestamp}_$sanitizedName")
 
         resolver.openInputStream(uri)?.use { input ->
             FileOutputStream(targetFile).use { output ->
@@ -71,7 +80,7 @@ object EpubParser {
                             if (opfInfo.spineCount > 0) spineItemCount = opfInfo.spineCount
                             if (opfInfo.coverHref != null) opfCoverHref = opfInfo.coverHref
                         } else if (name.endsWith(".html") || name.endsWith(".xhtml") || name.endsWith(".htm")) {
-                            val text = zip.bufferedReader().readText()
+                            val text = readLimitedString(zip, MAX_ENTRY_BYTES)
                             val plainText = stripHtml(text)
                             val words = plainText.split("\\s+".toRegex()).count { it.isNotBlank() }
                             totalHtmlWords += words
@@ -104,7 +113,7 @@ object EpubParser {
                                 entryName.endsWith(".png") || entryName.endsWith(".webp")
 
                         if (isImage) {
-                            val bytes = zip.readBytes()
+                            val bytes = readLimitedBytes(zip, MAX_ENTRY_BYTES)
                             if (targetCoverName != null && entryName.endsWith(targetCoverName)) {
                                 foundCoverBytes = bytes
                             } else if (entryName.contains("cover")) {
@@ -132,7 +141,7 @@ object EpubParser {
             e.printStackTrace()
         }
 
-        val fallbackTitle = originalFileName.removeSuffix(".epub").replace("_", " ")
+        val fallbackTitle = sanitizedName.removeSuffix(".epub").replace("_", " ")
         val finalTitle = title?.takeIf { it.isNotBlank() } ?: fallbackTitle
 
         val calculatedPages = when {
@@ -151,7 +160,7 @@ object EpubParser {
     }
 
     /**
-     * Membaca isi teks bab/konten dari file EPUB lokal
+     * Membaca isi teks bab/konten dari file EPUB lokal dengan bounded memory
      */
     fun readChapters(filePath: String): List<EpubChapter> {
         val file = File(filePath)
@@ -168,7 +177,7 @@ object EpubParser {
                         if ((name.endsWith(".html") || name.endsWith(".xhtml") || name.endsWith(".htm"))
                             && !name.contains("cover") && !name.contains("nav") && !name.contains("toc")) {
 
-                            val rawHtml = zip.bufferedReader().readText()
+                            val rawHtml = readLimitedString(zip, MAX_ENTRY_BYTES)
                             val cleanText = cleanHtmlContent(rawHtml)
                             if (cleanText.isNotBlank()) {
                                 chapters.add(
@@ -189,6 +198,27 @@ object EpubParser {
         }
 
         return chapters
+    }
+
+    private fun readLimitedBytes(input: InputStream, maxBytes: Long): ByteArray {
+        val buffer = ByteArray(8192)
+        val out = ByteArrayOutputStream()
+        var total = 0L
+        var read: Int
+        while (input.read(buffer).also { read = it } != -1) {
+            total += read
+            if (total > maxBytes) {
+                val allowed = (maxBytes - (total - read)).toInt().coerceAtLeast(0)
+                if (allowed > 0) out.write(buffer, 0, allowed)
+                break
+            }
+            out.write(buffer, 0, read)
+        }
+        return out.toByteArray()
+    }
+
+    private fun readLimitedString(input: InputStream, maxBytes: Long): String {
+        return readLimitedBytes(input, maxBytes).toString(Charsets.UTF_8)
     }
 
     private fun cleanHtmlContent(html: String): String {
@@ -228,8 +258,13 @@ object EpubParser {
         val itemMap = mutableMapOf<String, String>() // id to href
 
         try {
-            val factory = XmlPullParserFactory.newInstance()
-            factory.isNamespaceAware = false
+            val factory = XmlPullParserFactory.newInstance().apply {
+                isNamespaceAware = false
+                // Security Hardening: Disable DTD & entity expansion (XXE mitigation)
+                runCatching {
+                    setFeature("http://xmlpull.org/v1/doc/features.html#process-docdecl", false)
+                }
+            }
             val parser = factory.newPullParser()
             parser.setInput(inputStream, "UTF-8")
 
@@ -281,7 +316,7 @@ object EpubParser {
                 coverHref = itemMap[coverId]
             }
         } catch (e: Exception) {
-            // Ignore
+            // Ignore / Fallback gracefully
         }
 
         return OpfResult(title, author, spineCount, coverHref)
