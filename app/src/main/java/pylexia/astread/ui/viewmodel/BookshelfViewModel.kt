@@ -42,6 +42,7 @@ class BookshelfViewModel(private val repository: BookRepository) : ViewModel() {
                     author = metadata.author,
                     totalPages = metadata.totalPages,
                     currentPage = 0,
+                    coverPath = metadata.coverPath,
                     epubFilePath = metadata.localFilePath,
                     status = BookStatus.READING
                 )

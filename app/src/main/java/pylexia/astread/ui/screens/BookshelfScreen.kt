@@ -17,16 +17,20 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import pylexia.astread.data.model.BookEntity
 import pylexia.astread.ui.theme.GoldAccent
 import pylexia.astread.ui.theme.MidnightBackground
 import pylexia.astread.ui.theme.MidnightSurface
 import pylexia.astread.ui.theme.TextSecondary
 import pylexia.astread.ui.viewmodel.BookshelfViewModel
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -125,7 +129,7 @@ fun BookshelfScreen(
                     )
                     Spacer(modifier = Modifier.height(6.dp))
                     Text(
-                        text = "Tekan tombol + untuk memilih file EPUB dari penyimpanan HP kamu. Judul & halaman akan digenerate otomatis.",
+                        text = "Tekan tombol + untuk memilih file EPUB dari HP. Judul, halaman, dan poster cover akan diekstrak otomatis.",
                         color = TextSecondary,
                         fontSize = 13.sp,
                         lineHeight = 18.sp,
@@ -139,7 +143,7 @@ fun BookshelfScreen(
                     .fillMaxSize()
                     .padding(padding)
                     .padding(horizontal = 16.dp, vertical = 8.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 items(books, key = { it.id }) { book ->
                     BookItemCard(
@@ -164,76 +168,139 @@ fun BookItemCard(
     } else 0
     val remainingPages = (book.totalPages - book.currentPage).coerceAtLeast(0)
 
+    val coverFile = book.coverPath?.let { File(it) }
+    val hasValidCover = coverFile != null && coverFile.exists()
+
     Card(
         onClick = onClick,
         colors = CardDefaults.cardColors(containerColor = MidnightSurface),
         shape = RoundedCornerShape(16.dp),
         modifier = Modifier.fillMaxWidth()
     ) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.Top
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            // Poster Cover EPUB / Light Novel
+            Box(
+                modifier = Modifier
+                    .width(68.dp)
+                    .height(98.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(Color(0xFF1E2235)),
+                contentAlignment = Alignment.Center
             ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = book.title,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 17.sp,
-                        color = Color.White
+                if (hasValidCover) {
+                    AsyncImage(
+                        model = ImageRequest.Builder(LocalContext.current)
+                            .data(coverFile)
+                            .crossfade(true)
+                            .build(),
+                        contentDescription = "Cover ${book.title}",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
                     )
-                    if (!book.author.isNullOrBlank()) {
+                } else {
+                    // Fallback visual sampul jika file EPUB tidak menyertakan cover
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.padding(4.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Book,
+                            contentDescription = null,
+                            tint = GoldAccent.copy(alpha = 0.7f),
+                            modifier = Modifier.size(28.dp)
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
-                            text = book.author,
-                            fontSize = 13.sp,
-                            color = TextSecondary
+                            text = book.title.take(3).uppercase(),
+                            color = GoldAccent,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
                         )
                     }
                 }
-                Surface(
-                    shape = RoundedCornerShape(8.dp),
-                    color = GoldAccent.copy(alpha = 0.15f)
-                ) {
-                    Text(
-                        text = "$progressPercent%",
-                        color = GoldAccent,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 13.sp,
-                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                    )
-                }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.width(14.dp))
 
-            // Progress bar
-            LinearProgressIndicator(
-                progress = { (progressPercent / 100f).coerceIn(0f, 1f) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(6.dp)
-                    .clip(RoundedCornerShape(3.dp)),
-                color = GoldAccent,
-                trackColor = Color(0xFF262A3D)
-            )
-
-            Spacer(modifier = Modifier.height(10.dp))
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween
+            // Detail Buku & Bar Progress
+            Column(
+                modifier = Modifier.weight(1f)
             ) {
-                Text(
-                    text = "${book.currentPage} / ${book.totalPages} hal",
-                    fontSize = 12.sp,
-                    color = TextSecondary
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.Top
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = book.title,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 16.sp,
+                            color = Color.White,
+                            maxLines = 2
+                        )
+                        if (!book.author.isNullOrBlank()) {
+                            Text(
+                                text = book.author,
+                                fontSize = 12.sp,
+                                color = TextSecondary,
+                                maxLines = 1
+                            )
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.width(8.dp))
+
+                    Surface(
+                        shape = RoundedCornerShape(6.dp),
+                        color = GoldAccent.copy(alpha = 0.15f)
+                    ) {
+                        Text(
+                            text = "$progressPercent%",
+                            color = GoldAccent,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 12.sp,
+                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 3.dp)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Progress Bar
+                LinearProgressIndicator(
+                    progress = { (progressPercent / 100f).coerceIn(0f, 1f) },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(5.dp)
+                        .clip(RoundedCornerShape(3.dp)),
+                    color = GoldAccent,
+                    trackColor = Color(0xFF262A3D)
                 )
-                Text(
-                    text = if (remainingPages == 0) "Tamat 🎉" else "Sisa $remainingPages hal",
-                    fontSize = 12.sp,
-                    color = if (remainingPages == 0) GoldAccent else TextSecondary
-                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = "${book.currentPage} / ${book.totalPages} hal",
+                        fontSize = 11.sp,
+                        color = TextSecondary
+                    )
+                    Text(
+                        text = if (remainingPages == 0) "Tamat 🎉" else "Sisa $remainingPages hal",
+                        fontSize = 11.sp,
+                        color = if (remainingPages == 0) GoldAccent else TextSecondary
+                    )
+                }
             }
         }
     }

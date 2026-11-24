@@ -1,6 +1,8 @@
 package pylexia.astread.util
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.provider.OpenableColumns
 import org.xmlpull.v1.XmlPullParser
@@ -15,7 +17,8 @@ data class EpubMetadata(
     val title: String,
     val author: String?,
     val totalPages: Int,
-    val localFilePath: String
+    val localFilePath: String,
+    val coverPath: String?
 )
 
 data class EpubChapter(
@@ -36,8 +39,9 @@ object EpubParser {
             }
         }
 
+        val timestamp = System.currentTimeMillis()
         val booksDir = File(context.filesDir, "books").apply { mkdirs() }
-        val targetFile = File(booksDir, "${System.currentTimeMillis()}_$originalFileName")
+        val targetFile = File(booksDir, "${timestamp}_$originalFileName")
 
         resolver.openInputStream(uri)?.use { input ->
             FileOutputStream(targetFile).use { output ->
@@ -49,7 +53,10 @@ object EpubParser {
         var author: String? = null
         var totalHtmlWords = 0
         var spineItemCount = 0
+        var opfCoverHref: String? = null
+        var opfPath: String? = null
 
+        // Pass 1: Identifikasi OPF, Cover Href, dan Hitung Kata
         try {
             targetFile.inputStream().use { fileInput ->
                 ZipInputStream(fileInput).use { zip ->
@@ -57,10 +64,12 @@ object EpubParser {
                     while (entry != null) {
                         val name = entry.name.lowercase()
                         if (name.endsWith(".opf")) {
-                            val (opfTitle, opfAuthor, items) = parseOpf(zip)
-                            if (opfTitle != null && title == null) title = opfTitle
-                            if (opfAuthor != null && author == null) author = opfAuthor
-                            if (items > 0) spineItemCount = items
+                            opfPath = entry.name
+                            val opfInfo = parseOpf(zip)
+                            if (opfInfo.title != null && title == null) title = opfInfo.title
+                            if (opfInfo.author != null && author == null) author = opfInfo.author
+                            if (opfInfo.spineCount > 0) spineItemCount = opfInfo.spineCount
+                            if (opfInfo.coverHref != null) opfCoverHref = opfInfo.coverHref
                         } else if (name.endsWith(".html") || name.endsWith(".xhtml") || name.endsWith(".htm")) {
                             val text = zip.bufferedReader().readText()
                             val plainText = stripHtml(text)
@@ -69,6 +78,54 @@ object EpubParser {
                         }
                         entry = zip.nextEntry
                     }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        // Pass 2: Ekstraksi Gambar Cover Poster
+        val coversDir = File(context.filesDir, "covers").apply { mkdirs() }
+        val coverFile = File(coversDir, "${timestamp}_cover.jpg")
+        var extractedCoverPath: String? = null
+
+        val targetCoverName = opfCoverHref?.substringAfterLast('/')?.lowercase()
+
+        try {
+            var foundCoverBytes: ByteArray? = null
+            var fallbackFirstImageBytes: ByteArray? = null
+
+            targetFile.inputStream().use { fileInput ->
+                ZipInputStream(fileInput).use { zip ->
+                    var entry: ZipEntry? = zip.nextEntry
+                    while (entry != null && foundCoverBytes == null) {
+                        val entryName = entry.name.lowercase()
+                        val isImage = entryName.endsWith(".jpg") || entryName.endsWith(".jpeg") ||
+                                entryName.endsWith(".png") || entryName.endsWith(".webp")
+
+                        if (isImage) {
+                            val bytes = zip.readBytes()
+                            if (targetCoverName != null && entryName.endsWith(targetCoverName)) {
+                                foundCoverBytes = bytes
+                            } else if (entryName.contains("cover")) {
+                                foundCoverBytes = bytes
+                            } else if (fallbackFirstImageBytes == null) {
+                                fallbackFirstImageBytes = bytes
+                            }
+                        }
+                        entry = zip.nextEntry
+                    }
+                }
+            }
+
+            val finalCoverBytes = foundCoverBytes ?: fallbackFirstImageBytes
+            if (finalCoverBytes != null && finalCoverBytes.isNotEmpty()) {
+                val bitmap = BitmapFactory.decodeByteArray(finalCoverBytes, 0, finalCoverBytes.size)
+                if (bitmap != null) {
+                    FileOutputStream(coverFile).use { fos ->
+                        bitmap.compress(Bitmap.CompressFormat.JPEG, 90, fos)
+                    }
+                    extractedCoverPath = coverFile.absolutePath
                 }
             }
         } catch (e: Exception) {
@@ -88,7 +145,8 @@ object EpubParser {
             title = finalTitle,
             author = author?.takeIf { it.isNotBlank() },
             totalPages = calculatedPages,
-            localFilePath = targetFile.absolutePath
+            localFilePath = targetFile.absolutePath,
+            coverPath = extractedCoverPath
         )
     }
 
@@ -154,10 +212,20 @@ object EpubParser {
         return html.replace("<[^>]*>".toRegex(), " ")
     }
 
-    private fun parseOpf(inputStream: InputStream): Triple<String?, String?, Int> {
+    private data class OpfResult(
+        val title: String?,
+        val author: String?,
+        val spineCount: Int,
+        val coverHref: String?
+    )
+
+    private fun parseOpf(inputStream: InputStream): OpfResult {
         var title: String? = null
         var author: String? = null
         var spineCount = 0
+        var coverId: String? = null
+        var coverHref: String? = null
+        val itemMap = mutableMapOf<String, String>() // id to href
 
         try {
             val factory = XmlPullParserFactory.newInstance()
@@ -174,6 +242,22 @@ object EpubParser {
                         currentTag = parser.name.lowercase()
                         if (currentTag == "itemref") {
                             spineCount++
+                        } else if (currentTag == "meta") {
+                            val name = parser.getAttributeValue(null, "name")
+                            val content = parser.getAttributeValue(null, "content")
+                            if (name.equals("cover", ignoreCase = true) && content != null) {
+                                coverId = content
+                            }
+                        } else if (currentTag == "item") {
+                            val id = parser.getAttributeValue(null, "id")
+                            val href = parser.getAttributeValue(null, "href")
+                            val properties = parser.getAttributeValue(null, "properties")
+                            if (id != null && href != null) {
+                                itemMap[id] = href
+                            }
+                            if (properties != null && properties.contains("cover-image") && href != null) {
+                                coverHref = href
+                            }
                         }
                     }
                     XmlPullParser.TEXT -> {
@@ -192,10 +276,14 @@ object EpubParser {
                 }
                 eventType = parser.next()
             }
+
+            if (coverHref == null && coverId != null) {
+                coverHref = itemMap[coverId]
+            }
         } catch (e: Exception) {
             // Ignore
         }
 
-        return Triple(title, author, spineCount)
+        return OpfResult(title, author, spineCount, coverHref)
     }
 }
