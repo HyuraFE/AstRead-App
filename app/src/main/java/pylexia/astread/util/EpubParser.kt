@@ -18,12 +18,17 @@ data class EpubMetadata(
     val localFilePath: String
 )
 
+data class EpubChapter(
+    val title: String,
+    val content: String
+)
+
 object EpubParser {
 
     fun parseAndSave(context: Context, uri: Uri): EpubMetadata {
         val resolver = context.contentResolver
         var originalFileName = "imported_book.epub"
-        
+
         resolver.query(uri, null, null, null, null)?.use { cursor ->
             val nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
             if (nameIndex != -1 && cursor.moveToFirst()) {
@@ -31,7 +36,6 @@ object EpubParser {
             }
         }
 
-        // Simpan file EPUB ke internal storage aplikasi
         val booksDir = File(context.filesDir, "books").apply { mkdirs() }
         val targetFile = File(booksDir, "${System.currentTimeMillis()}_$originalFileName")
 
@@ -46,7 +50,6 @@ object EpubParser {
         var totalHtmlWords = 0
         var spineItemCount = 0
 
-        // Baca arsip ZIP (EPUB adalah ZIP yang berisi content.opf dan file HTML/XHTML)
         try {
             targetFile.inputStream().use { fileInput ->
                 ZipInputStream(fileInput).use { zip ->
@@ -59,7 +62,6 @@ object EpubParser {
                             if (opfAuthor != null && author == null) author = opfAuthor
                             if (items > 0) spineItemCount = items
                         } else if (name.endsWith(".html") || name.endsWith(".xhtml") || name.endsWith(".htm")) {
-                            // Estimasi kata untuk perhitungan halaman standar (250-300 kata per halaman standar buku)
                             val text = zip.bufferedReader().readText()
                             val plainText = stripHtml(text)
                             val words = plainText.split("\\s+".toRegex()).count { it.isNotBlank() }
@@ -75,9 +77,7 @@ object EpubParser {
 
         val fallbackTitle = originalFileName.removeSuffix(".epub").replace("_", " ")
         val finalTitle = title?.takeIf { it.isNotBlank() } ?: fallbackTitle
-        
-        // Standar industri penerbitan: 1 halaman novel standar = ~275 kata
-        // Jika tidak ada kata yang terhitung (misal gambar/enkripsi), fallback ke jumlah spine items * 10 atau minimal 50 hal
+
         val calculatedPages = when {
             totalHtmlWords > 0 -> (totalHtmlWords / 275).coerceAtLeast(1)
             spineItemCount > 0 -> (spineItemCount * 12).coerceAtLeast(1)
@@ -90,6 +90,64 @@ object EpubParser {
             totalPages = calculatedPages,
             localFilePath = targetFile.absolutePath
         )
+    }
+
+    /**
+     * Membaca isi teks bab/konten dari file EPUB lokal
+     */
+    fun readChapters(filePath: String): List<EpubChapter> {
+        val file = File(filePath)
+        if (!file.exists()) return emptyList()
+
+        val chapters = mutableListOf<EpubChapter>()
+        try {
+            file.inputStream().use { fileInput ->
+                ZipInputStream(fileInput).use { zip ->
+                    var entry: ZipEntry? = zip.nextEntry
+                    var chapterIdx = 1
+                    while (entry != null) {
+                        val name = entry.name.lowercase()
+                        if ((name.endsWith(".html") || name.endsWith(".xhtml") || name.endsWith(".htm"))
+                            && !name.contains("cover") && !name.contains("nav") && !name.contains("toc")) {
+
+                            val rawHtml = zip.bufferedReader().readText()
+                            val cleanText = cleanHtmlContent(rawHtml)
+                            if (cleanText.isNotBlank()) {
+                                chapters.add(
+                                    EpubChapter(
+                                        title = "Bab $chapterIdx",
+                                        content = cleanText
+                                    )
+                                )
+                                chapterIdx++
+                            }
+                        }
+                        entry = zip.nextEntry
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+
+        return chapters
+    }
+
+    private fun cleanHtmlContent(html: String): String {
+        return html
+            .replace(Regex("<style[^>]*>.*?</style>", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(Regex("<script[^>]*>.*?</script>", RegexOption.DOT_MATCHES_ALL), "")
+            .replace(Regex("(?i)<br\\s*/?>"), "\n")
+            .replace(Regex("(?i)</p>"), "\n\n")
+            .replace(Regex("(?i)</div>"), "\n")
+            .replace(Regex("<[^>]*>"), "")
+            .replace("&nbsp;", " ")
+            .replace("&amp;", "&")
+            .replace("&lt;", "<")
+            .replace("&gt;", ">")
+            .replace("&quot;", "\"")
+            .replace("&#39;", "'")
+            .trim()
     }
 
     private fun stripHtml(html: String): String {
@@ -135,7 +193,7 @@ object EpubParser {
                 eventType = parser.next()
             }
         } catch (e: Exception) {
-            // Abaikan parsing error, fallback ke nama file
+            // Ignore
         }
 
         return Triple(title, author, spineCount)
