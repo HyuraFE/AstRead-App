@@ -168,7 +168,7 @@ fun BookItemCard(
     } else 0
     val remainingPages = (book.totalPages - book.currentPage).coerceAtLeast(0)
 
-    val coverFile = book.coverPath?.let { File(it) }
+    val coverFile = book.coverUri?.let { File(it) }
     val hasValidCover = coverFile != null && coverFile.exists()
 
     Card(
